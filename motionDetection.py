@@ -81,7 +81,7 @@ clip2 = VideoFileClip("2.mp4")
 clip3 = VideoFileClip("3.mp4")
 
 finalclip = concatenate_videoclips([clip1, clip2, clip3])
-finalclip.write_videofile("out.mp4") # 寫出檔案out.mp4
+finalclip.write_videofile("out.mp4") # write to out.mp4
 
 
 import os
@@ -89,17 +89,17 @@ from moviepy.editor import VideoFileClip, concatenate_videoclips
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 
 def videoConcat(name, videos, path="./"):
-    # 函數功能: 將videos內的視頻首尾相接，輸出name
+    # Function: Concatenate videos together to a MP4 file
     # ex: videoConcat("out.mp4", ["1.mp4", "2.mp4", "3.mp4"],"./music")
-    # NOTE: 每個影片的畫面長寬需一致
+    # NOTE: The dimension of all videos MUST BE THE SAME.
     origin_path = os.getcwd()
     os.chdir(path)
     finalclip = concatenate_videoclips([VideoFileClip(v) for v in videos])
     finalclip.write_videofile(name)
     os.chdir(origin_path)
 
-# 函數功能: 在指定路徑下，從in_video截取t1~t2秒的視頻，輸出out_video
-# ex: mySubclip("1.mp4", "out.mp4", 10, 15,'./music')，參數可接受浮點數
+# Function: retrieve a portion of video (t1-t2) from the input video
+# ex: mySubclip("1.mp4", "out.mp4", 10, 15,'./music')  Accept floating point number
 #
 def mySubclip(in_video, out_video, t1, t2, path="./"):
 
@@ -112,7 +112,7 @@ def mySubclip(in_video, out_video, t1, t2, path="./"):
 
 
 def myAudioclip(in_video, out_audio, path="./"):
-    # 函數功能: 在指定路徑下，截取in_video的聲音檔，輸出out_audio
+    # Function: retrieve the audio from the video file
     # ex: mySubclip("1.mp4", "out.mp3", './music')
     origin_path = os.getcwd()
     os.chdir(path)
