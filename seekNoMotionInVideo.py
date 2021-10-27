@@ -27,20 +27,36 @@ def subclip_saveClipInfo(fileHandle, rawFileName, timestamp, clipStartFrame, cli
     clipStartSec = clipStartFrame / clipActualFps
     clipStopSec  = clipStopFrame / clipActualFps
     outFileSuffix = datetime.fromtimestamp(timestamp + clipStartSec).strftime("%Y%m%d-%H%M%S")
-    print('\rMotion  {:4.3f}s - {:4.3f}s   [{:.3f}s]  [{}.mp4]'.format(clipStartSec, clipStopSec, (clipStopSec-clipStartSec), outFileSuffix))
-    print('Motion,{},{}.mp4,{:.3f},{:.3f},{:.3f}s'.format(rawFileName, outFileSuffix, (timestamp+clipStartSec), (timestamp+clipStopSec), (clipStopSec-clipStartSec)), file=fileHandle)
+
+    print('\rMotion  {:4.3f}s - {:4.3f}s   [{:.3f}s]  [{}.mp4]'.format(clipStartSec, clipStopSec, 
+        (clipStopSec-clipStartSec), outFileSuffix))
+
+    print('Motion,{},{}.mp4,{:.3f},{:.3f},{:.3f}s,{},{}'.format(rawFileName, 
+        outFileSuffix, (timestamp+clipStartSec), (timestamp+clipStopSec), (clipStopSec-clipStartSec), 
+        clipStartFrame, clipStopFrame), file=fileHandle)
 
 
 def subclip_saveNoiseInfo(fileHandle, rawFileName, timestamp, clipStartFrame, clipStopFrame):
     clipStartSec = clipStartFrame / clipActualFps
     clipStopSec  = clipStopFrame / clipActualFps
     outFileSuffix = datetime.fromtimestamp(timestamp + clipStartSec).strftime("%Y%m%d-%H%M%S")
-    print('\rNoise   {:4.3f}s - {:4.3f}s   [{:.3f}s]  [{}.mp4]'.format(clipStartSec, clipStopSec, (clipStopSec-clipStartSec), outFileSuffix))
-    print('Noise,{},{}.mp4,{:.3f},{:.3f},{:.3f}s'.format(rawFileName, outFileSuffix, (timestamp+clipStartSec), (timestamp+clipStopSec), (clipStopSec-clipStartSec)), file=fileHandle)
+
+    print('\rNoise   {:4.3f}s - {:4.3f}s   [{:.3f}s]  [{}.mp4]'.format(clipStartSec, clipStopSec, 
+        (clipStopSec-clipStartSec), outFileSuffix))
+    
+    print('Noise,{},{}.mp4,{:.3f},{:.3f},{:.3f}s,{},{}'.format(rawFileName, outFileSuffix, 
+        (timestamp+clipStartSec), (timestamp+clipStopSec), (clipStopSec-clipStartSec), 
+        clipStartFrame, clipStopFrame), file=fileHandle)
 
 
 def subclip_logDamaged(filePath, outFilePathPrefix):
     fileLog = open(outFilePathPrefix + '\\' + constant.FILE_DAMAGED_VIDEO, 'a')
+    print(filePath, file=fileLog)
+    fileLog.close()
+
+
+def subclip_logNoMotion(filePath, outFilePathPrefix):
+    fileLog = open(outFilePathPrefix + '\\' + constant.FILE_NO_MOTION, 'a')
     print(filePath, file=fileLog)
     fileLog.close()
 
@@ -111,7 +127,8 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
         fileRec = open(outFilePathPrefix + r'\videoList.csv', 'a')
 
         cv.namedWindow('Found Motion', cv.WINDOW_NORMAL)
-        cv.resizeWindow('Found Motion', constant.PREVIEW_W_SIZE, int(clipHeight*constant.PREVIEW_W_SIZE/clipWidth))
+        cv.resizeWindow('Found Motion', constant.PREVIEW_W_SIZE, 
+                        int(clipHeight*constant.PREVIEW_W_SIZE/clipWidth))
 
         ret, frame1 = cap.read()
         if ret: ret, frame1 = cap.read()    # skip this frame
@@ -125,6 +142,9 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
 
         totalSubClips = 0
         totalNoises = 0
+        countFrameInMotion = 0
+
+        cv.imshow("Found Motion", frame1)
 
         while (ret and cap.isOpened()):
 
@@ -138,7 +158,7 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
 
             if len(contours) > 1:
 
-                # Check valid motion
+                # Check valid contour for motion
                 countMotion = 0
                 for contour in contours:
                     if cv.contourArea(contour) > 1600:
@@ -154,26 +174,30 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
 
                     # Trace motion continunity and update the subclip_stp
                     subclip_stp = frameId
+                    countFrameInMotion += 1
 
-                    print('\r     [{} - {}, {}] [{}] [{}]'.format(subclip_stt, subclip_stp, frameId, (subclip_stp-subclip_stt), (frameId-subclip_stp)))
+                    #print('\r     [{} - {}, {}] [{}] [{}]'.format(subclip_stt, subclip_stp, frameId, (subclip_stp-subclip_stt), (frameId-subclip_stp)))
                     cv.imshow("Found Motion", frame1)
-                    if cv.waitKey(1) == 27:
-                        break
+                    if cv.waitKey(1) == 27:  break
 
             else:
                 # No motion found
                 if subclip_stt != -1 and (frameId - subclip_stp) > constant.NOISE_WINDOW_FRAME:
                     # Previous motion stopped after NOISE_WINDOW_FRAME
-                    if (subclip_stp - subclip_stt) > constant.MIN_MOTION_DURA_FRAMES:
-                        # Save clip info if the clip duration is longer than MIN_MOTION_DURA_FRAMES
+                    if (subclip_stp - subclip_stt > constant.ONE_SECOND_FRAMES
+                        ) and (countFrameInMotion > constant.MIN_MOTION_DURA_FRAMES):
+                        # Save clip info if sum of motion frames is longer than MIN_MOTION_DURA_FRAMES
                         totalSubClips += 1
-                        subclip_saveClipInfo(fileRec, inFilePath, clipTimestamp, subclip_stt, subclip_stp)
+                        subclip_saveClipInfo(fileRec, inFilePath, clipTimestamp, 
+                                            subclip_stt, subclip_stp)
                     else:
                         # Save noise position
                         totalNoises += 1
-                        subclip_saveNoiseInfo(fileRec, inFilePath, clipTimestamp, subclip_stt, subclip_stp)
+                        subclip_saveNoiseInfo(fileRec, inFilePath, clipTimestamp, 
+                                            subclip_stt, subclip_stp)
 
                     # Reset subclip tags
+                    countFrameInMotion = 0
                     subclip_stt = -1
                     subclip_stp = -1
 
@@ -187,19 +211,22 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
             if frameId >= nextRefresh:
                 nextRefresh += constant.UI_REFRESH_DURA_FRAMES
                 print('\r{}'.format(frameId), end='')
-                if cv.waitKey(1) == 27:
-                    break
+                if cv.waitKey(1) == 27:  break
 
         if subclip_stt != -1:
             # Save last subclip
-            if (subclip_stp - subclip_stt) > constant.MIN_MOTION_DURA_FRAMES:
-                # Save clip info if the clip duration is longer than MIN_MOTION_DURA_FRAMES
+            if (subclip_stp - subclip_stt > constant.ONE_SECOND_FRAMES) and \
+                (countFrameInMotion > constant.MIN_MOTION_DURA_FRAMES):
+                # Save clip info if the clip duration is longer than ONE_SECOND_FRAMES
+                # and sum of motion frames is long than MIN_MOTION_DURA_FRAMES
                 totalSubClips += 1
-                subclip_saveClipInfo(fileRec, inFilePath, clipTimestamp, subclip_stt, subclip_stp)
+                subclip_saveClipInfo(fileRec, inFilePath, clipTimestamp, 
+                                    subclip_stt, subclip_stp)
             else:
                 # Save noise position
                 totalNoises += 1
-                subclip_saveNoiseInfo(fileRec, inFilePath, clipTimestamp, subclip_stt, subclip_stp)
+                subclip_saveNoiseInfo(fileRec, inFilePath, clipTimestamp, 
+                                    subclip_stt, subclip_stp)
 
 
         timeUsed = datetime.timestamp(datetime.now()) - timeStt
@@ -209,22 +236,61 @@ def subclip_seekNoMotionInVideo(inFilePath, inFilePathPrefix, outFilePathPrefix)
         cap.release()
         fileRec.close()
         cv.destroyAllWindows()
-        
+
         if totalSubClips > 0:
             return False        # Found useful subclip
-        
+
         return True             # No Motion found
+
+
+def seekNoMotionInVideo_batchProcess(inSubPath, inRootFolder, outRootFolder):
+    global totalClips
+
+    with os.scandir(inSubPath) as entries:
+        for entry in entries:
+            if entry.is_dir():
+                if filterSourceFolder(entry.name) == True:
+                    seekNoMotionInVideo_batchProcess(entry.path, inRootFolder, outRootFolder)       # recursively loop all sub-folder
+
+            elif entry.is_file() and entry.name.endswith(".mp4"):
+                totalClips += 1
+                if entry.stat().st_size > constant.MIN_VIDEO_FILE_SIZE:
+                    #print('\n{:03d} - {}\t[{}]'.format(totalClips, entry.path, entry.name))
+                    ret = subclip_seekNoMotionInVideo(entry.path, inRootFolder, outRootFolder)
+                    if ret:
+                        subclip_logNoMotion(entry.path, outRootFolder)
+                elif entry.stat().st_size == 0:
+                    # File size == 0, no use
+                    subclip_logNoMotion(entry.path, outRootFolder)
+                else:
+                    # File size too small, mark it as damaged
+                    print('File size too small---:::: Damaged file: {} [{}B]'.format(entry.path, entry.stat().st_size))
+                    subclip_logDamaged(entry.path, outRootFolder)
+
+    entries.close()
+
+def filterSourceFolder(folderName):
+    if len(folderName) == 8:
+        if int(folderName) < constant.SRC_FOLDER_START:
+            print('Skip ', folderName)
+            return False
+
+    return True
+
 
 
 if __name__ == "__main__":
 
     inFolder = constant.FILEIN_ROOTPATH
     outFolder = constant.FILEOUT_ROOTPATH
+    seekNoMotionInVideo_batchProcess(inFolder, inFolder, outFolder)
 
     #inFile = r'c:\temp\in\20161030\16\162225.mp4'
     #inFile = r'c:\temp\in\20161030\15\132149.mp4'
-    inFile = r'c:\temp\in\20161030\13\135220.mp4'
-    subclip_seekNoMotionInVideo(inFile, inFolder, outFolder)
+    #inFile = r'c:\temp\in\20161030\13\135220.mp4'
+    #inFile = r'c:\temp\in\20161030\09\090826.mp4'
+    #inFile = r'c:\temp\in\20150420\14\140017.mp4'
+    #subclip_seekNoMotionInVideo(inFile, inFolder, outFolder)
 
 
 
